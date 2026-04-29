@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Trasa Praha – Benešov</title>
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; }
+
+    #panel {
+      background: white;
+      padding: 12px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    #panel h1 { font-size: 15px; font-weight: 600; color: #1a1a2e; white-space: nowrap; }
+
+    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .btn {
+      padding: 6px 13px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: #555;
+    }
+    .btn:hover { background: #f5f5f5; border-color: #bbb; }
+    .btn.active { background: #0055ff; color: white; border-color: #0055ff; }
+
+    #info { margin-left: auto; font-size: 13px; color: #555; white-space: nowrap; }
+    #info strong { color: #111; }
+
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    #map { flex: 1; }
+
+    #sidebar {
+      width: 320px;
+      flex-shrink: 0;
+      background: white;
+      border-left: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #elevation-wrap {
+      padding: 16px;
+      border-bottom: 1px solid #eee;
+    }
+
+    #elevation-wrap h2 { font-size: 13px; color: #888; font-weight: 500; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    #elevation-chart { height: 140px; }
+
+    #place-info {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    #place-info h2 { font-size: 13px; color: #888; font-weight: 500; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .place-card {
+      background: #f8f9ff;
+      border: 1px solid #e8eaf6;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #333;
+    }
+
+    .place-card .place-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .place-card .place-text { color: #555; }
+
+    .place-loading {
+      color: #888;
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    .place-hint {
+      color: #aaa;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 20px;
+      line-height: 1.6;
+    }
+
+    .elev-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .elev-stat {
+      flex: 1;
+      background: #f8f9ff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .elev-stat strong { display: block; font-size: 15px; color: #1a1a2e; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Praha → Benešov</h1>
+  <div class="btn-group">
+    <button class="btn active" data-type="car_fast_traffic">🚗 Auto (provoz)</button>
+    <button class="btn" data-type="car_fast">🚗 Auto (rychlá)</button>
+    <button class="btn" data-type="car_short">🚗 Auto (nejkratší)</button>
+    <button class="btn" data-type="foot_fast">🚶 Pěšky</button>
+    <button class="btn" data-type="bike_road">🚴 Kolo (silnice)</button>
+    <button class="btn" data-type="bike_mountain">🚵 Kolo (terén)</button>
+  </div>
+  <div id="info">Načítám…</div>
+</div>
+
+<div id="main">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div id="elevation-wrap">
+      <h2>Výškový profil</h2>
+      <canvas id="elevation-chart"></canvas>
+      <div class="elev-stats" id="elev-stats"></div>
+    </div>
+    <div id="place-info">
+      <h2>O místě</h2>
+      <div class="place-hint">Klikni na zelený nebo červený špendlík pro informace o místě.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_KEY = 'S3B1rwnPF4X2tFSZu00wtAVCoL00hWfXCEOXdRBCveM';
+  const PRAHA   = [14.4009399, 50.0711206];
+  const BENESOV = [14.6883,    49.7817];
+
+  const BARVY = {
+    car_fast_traffic: '#0055ff',
+    car_fast:         '#0099ff',
+    car_short:        '#00bbff',
+    foot_fast:        '#22aa44',
+    bike_road:        '#ff8800',
+    bike_mountain:    '#cc4400',
+  };
+
+  let elevChart = null;
+
+    const map = new maplibregl.Map({
+    container: 'map',
+    center: [14.55, 49.93],
+    zoom: 9,
+    style: {
+      version: 8,
+      sources: {
+        'mapy-tiles': {
+          type: 'raster',
+          tiles: [`https://api.mapy.cz/v1/maptiles/basic/256/{z}/{x}/{y}?apikey=${API_KEY}`],
+          tileSize: 256,
+          attribution: '<a href="https://mapy.cz/">Mapy.cz</a>',
+        },
+      },
+      layers: [{ id: 'tiles', type: 'raster', source: 'mapy-tiles' }],
+    },
+    // Nižší požadavky na WebGL
+    antialias: false,
+    preserveDrawingBuffer: false,
+    failIfMajorPerformanceCaveat: false
+  });
+
+  class LogoControl {
+    onAdd() {
+      this._container = document.createElement('div');
+      this._container.className = 'maplibregl-ctrl';
+      this._container.innerHTML = '<a href="https://mapy.cz/" target="_blank"><img width="100px" src="https://api.mapy.cz/img/api/logo.svg"></a>';
+      return this._container;
+    }
+    onRemove() { this._container?.parentNode?.removeChild(this._container); }
+  }
+
+  map.addControl(new LogoControl(), 'bottom-left');
+  map.addControl(new maplibregl.NavigationControl());
+
+  // Markery
+  function makeMarker(lngLat, color, name) {
+    const marker = new maplibregl.Marker({ color })
+      .setLngLat(lngLat)
+      .addTo(map);
+
+    marker.getElement().style.cursor = 'pointer';
+    marker.getElement().addEventListener('click', () => showPlaceInfo(name, lngLat));
+
+    return marker;
+  }
+
+  makeMarker(PRAHA,   '#22aa44', 'Praha');
+  makeMarker(BENESOV, '#dd3333', 'Benešov');
+
+  // Wikipedia info
+  async function showPlaceInfo(name, lngLat) {
+    const el = document.getElementById('place-info');
+    el.innerHTML = `<h2>O místě</h2><div class="place-loading">Načítám informace…</div>`;
+
+    try {
+      const url = `https://cs.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
+      const response = await fetch(url);
+      const json = await response.json();
+
+      if (json.type === 'disambiguation' || !json.extract) throw new Error('Nenalezeno');
+
+      const sentences = json.extract.match(/[^.!?]+[.!?]+/g) ?? [];
+      const text = sentences.slice(0, 3).join(' ').trim() || json.extract;
+
+      el.innerHTML = `
+        <h2>O místě</h2>
+        <div class="place-card">
+          <div class="place-name">${json.title}</div>
+          <div class="place-text">${text}</div>
+          <div style="margin-top:10px;font-size:11px;color:#aaa">
+            Zdroj: <a href="${json.content_urls?.desktop?.page ?? '#'}" target="_blank" style="color:#aaa">Wikipedia</a>
+          </div>
+        </div>`;
+    } catch (e) {
+      el.innerHTML = `
+        <h2>O místě</h2>
+        <div class="place-card">
+          <div class="place-name">${name}</div>
+          <div class="place-text" style="color:#999">Informace se nepodařilo načíst.</div>
+        </div>`;
+    }
+  }
+
+  // Pomocná funkce pro bounding box
+  function bbox(coords) {
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    coords.forEach(([lng, lat]) => {
+      minLng = Math.min(lng, minLng);
+      maxLng = Math.max(lng, maxLng);
+      minLat = Math.min(lat, minLat);
+      maxLat = Math.max(lat, maxLat);
+    });
+    return [[minLng, minLat], [maxLng, maxLat]];
+  }
+
+  function formatDuration(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return h > 0 ? `${h} hod ${m} min` : `${m} min`;
+  }
+
+    // === ČISTÁ A ROBUSTNÍ VERZE loadElevation ===
+        async function loadElevation(coords) {
+    console.log("loadElevation volána s", coords?.length, "body");
+
+    if (!coords || coords.length < 2) {
+      document.getElementById('elev-stats').innerHTML = `<div style="color:#e00">Nedostatek souřadnic</div>`;
+      return;
+    }
+
+    const MAX_POINTS = 256;
+    const step = Math.max(1, Math.floor(coords.length / MAX_POINTS));
+    const sampled = coords.filter((_, i) => i % step === 0).slice(0, MAX_POINTS);
+
+    try {
+      const url = new URL('https://api.mapy.cz/v1/elevation');
+      url.searchParams.set('apikey', API_KEY);
+
+      sampled.forEach(([lng, lat]) => {
+        url.searchParams.append('positions', `${lng},${lat}`);
+      });
+
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const json = await response.json();
+
+      let elevationItems = [];
+      if (Array.isArray(json)) elevationItems = json;
+      else if (json?.items && Array.isArray(json.items)) elevationItems = json.items;
+      else if (json?.results && Array.isArray(json.results)) elevationItems = json.results;
+
+      const elevations = elevationItems.map(item => Math.round(item?.elevation ?? 0));
+      const finalElevations = elevations.slice(0, sampled.length);
+
+      if (finalElevations.length < 2) throw new Error("Nedostatek dat");
+
+      let uphill = 0, downhill = 0;
+      for (let i = 1; i < finalElevations.length; i++) {
+        const diff = finalElevations[i] - finalElevations[i-1];
+        if (diff > 0) uphill += diff;
+        else if (diff < 0) downhill += Math.abs(diff);
+      }
+
+      const minElev = Math.min(...finalElevations);
+      const maxElev = Math.max(...finalElevations);
+      const totalChange = uphill + downhill;
+
+      document.getElementById('elev-stats').innerHTML = `
+        <div class="elev-stat"><strong>${minElev} m</strong>minimum</div>
+        <div class="elev-stat"><strong>${maxElev} m</strong>maximum</div>
+        <div class="elev-stat"><strong>+${Math.round(uphill)} m</strong>stoupání</div>
+        <div class="elev-stat"><strong>-${Math.round(downhill)} m</strong>klesání</div>
+        <div class="elev-stat" style="flex: 1.6; background: #eef3ff; border: 1px solid #c0d0ff;">
+          <strong style="color:#0066ff">${Math.round(totalChange)} m</strong><br>celkové převýšení
+        </div>`;
+
+      const distances = [0];
+      for (let i = 1; i < sampled.length; i++) {
+        const [lng1, lat1] = sampled[i-1];
+        const [lng2, lat2] = sampled[i];
+        const dlng = (lng2 - lng1) * Math.cos((lat1 * Math.PI) / 180) * 111.32;
+        const dlat = (lat2 - lat1) * 111.32;
+        const d = Math.sqrt(dlng**2 + dlat**2);
+        distances.push(+(distances[distances.length-1] + d).toFixed(1));
+      }
+
+      // === DŮLEŽITÉ OPRAVY PRO CHYBY WEBGL ===
+      if (elevChart) {
+        elevChart.destroy();
+        elevChart = null;
+      }
+
+      // Malé zpoždění, aby se mapa stabilizovala
+      setTimeout(() => {
+        const canvas = document.getElementById('elevation-chart');
+        const ctx = canvas.getContext('2d');
+
+        // Zajistíme správnou velikost canvasu
+        canvas.style.width = '100%';
+        canvas.style.height = '140px';
+
+        elevChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: distances,
+            datasets: [{
+              data: finalElevations,
+              borderColor: '#0066ff',
+              backgroundColor: 'rgba(0, 102, 255, 0.15)',
+              borderWidth: 3,
+              tension: 0.35,
+              pointRadius: 0,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                ticks: { maxTicksLimit: 8, font: { size: 10 }, color: '#555' },
+                grid: { color: '#f0f0f0' }
+              },
+              y: {
+                min: Math.floor(minElev * 0.82),
+                max: Math.ceil(maxElev * 1.18),
+                ticks: { 
+                  stepSize: 50,
+                  font: { size: 10 }, 
+                  color: '#555',
+                  callback: v => v + ' m'
+                },
+                grid: { color: '#f0f0f0' }
+              }
+            }
+          }
+        });
+        console.log("Graf vytvořen s min:", minElev, "max:", maxElev);
+      }, 100);
+
+    } catch (e) {
+      console.error("CHYBA v loadElevation:", e);
+      document.getElementById('elev-stats').innerHTML = 
+        `<div style="color:#e00;font-size:12px">Nelze načíst výškový profil</div>`;
+    }
+  }
+
+  // Načtení trasy
+  async function loadRoute(routeType) {
+    document.getElementById('info').textContent = 'Načítám trasu…';
+
+    try {
+      const url = new URL('https://api.mapy.cz/v1/routing/route');
+      url.searchParams.set('apikey', API_KEY);
+      url.searchParams.set('lang', 'cs');
+      url.searchParams.set('start', PRAHA.join(','));
+      url.searchParams.set('end', BENESOV.join(','));
+      url.searchParams.set('routeType', routeType);
+      url.searchParams.set('avoidToll', 'false');
+
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const json = await response.json();
+
+      const coords = json.geometry?.geometry?.coordinates || json.geometry?.coordinates;
+
+      if (!coords) throw new Error("Chybí geometrie trasy");
+
+      const km = (json.length / 1000).toFixed(1);
+
+      document.getElementById('info').innerHTML = 
+        `<strong>${km} km</strong> · ${formatDuration(json.duration)}`;
+
+      map.getSource('route').setData({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: coords }
+      });
+
+      map.setPaintProperty('route-line', 'line-color', BARVY[routeType] ?? '#0055ff');
+      map.fitBounds(bbox(coords), { padding: 60 });
+
+      // Načti výškový profil
+      loadElevation(coords);
+
+    } catch (e) {
+      console.error(e);
+      document.getElementById('info').textContent = 'Chyba při načítání trasy';
+    }
+  }
+
+  // Inicializace mapy
+  map.on('load', () => {
+    map.addSource('route', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+    });
+
+    map.addLayer({
+      id: 'route-line',
+      type: 'line',
+      source: 'route',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 
+        'line-color': '#0055ff', 
+        'line-width': 5, 
+        'line-opacity': 0.85 
+      }
+    });
+
+    loadRoute('car_fast_traffic');
+  });
+
+  // Přepínání typů tras
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadRoute(btn.dataset.type);
+    });
+  });
+</script>
+
+</body>
+</html>
