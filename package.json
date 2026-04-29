@@ -1,0 +1,24 @@
+{
+  "name": "mapycz",
+  "version": "1.0.0",
+  "description": "Prague to Benešov route planner with elevation profile",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "mapy.cz",
+    "route",
+    "elevation",
+    "mapping"
+  ],
+  "author": "xkraust",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^2.7.0"
+  }
+}
