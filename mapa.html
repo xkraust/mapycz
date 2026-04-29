@@ -188,7 +188,6 @@
 </div>
 
 <script>
-  const API_KEY = 'S3B1rwnPF4X2tFSZu00wtAVCoL00hWfXCEOXdRBCveM';
   const PRAHA   = [14.4009399, 50.0711206];
   const BENESOV = [14.6883,    49.7817];
 
@@ -212,7 +211,7 @@
       sources: {
         'mapy-tiles': {
           type: 'raster',
-          tiles: [`https://api.mapy.cz/v1/maptiles/basic/256/{z}/{x}/{y}?apikey=${API_KEY}`],
+          tiles: ['/api/maptiles/basic/{z}/{x}/{y}'],
           tileSize: 256,
           attribution: '<a href="https://mapy.cz/">Mapy.cz</a>',
         },
@@ -319,8 +318,7 @@
     const sampled = coords.filter((_, i) => i % step === 0).slice(0, MAX_POINTS);
 
     try {
-      const url = new URL('https://api.mapy.cz/v1/elevation');
-      url.searchParams.set('apikey', API_KEY);
+      const url = new URL('/api/elevation', window.location.origin);
 
       sampled.forEach(([lng, lat]) => {
         url.searchParams.append('positions', `${lng},${lat}`);
@@ -431,8 +429,7 @@
     document.getElementById('info').textContent = 'Načítám trasu…';
 
     try {
-      const url = new URL('https://api.mapy.cz/v1/routing/route');
-      url.searchParams.set('apikey', API_KEY);
+      const url = new URL('/api/routing/route', window.location.origin);
       url.searchParams.set('lang', 'cs');
       url.searchParams.set('start', PRAHA.join(','));
       url.searchParams.set('end', BENESOV.join(','));
