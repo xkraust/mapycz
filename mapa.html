@@ -48,12 +48,43 @@
 
     #sidebar {
       width: 320px;
+      min-width: 200px;
+      max-width: 640px;
       flex-shrink: 0;
       background: white;
       border-left: 1px solid #e0e0e0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      position: relative;
+    }
+
+    #resize-handle {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      cursor: col-resize;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #resize-handle::after {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 40px;
+      border-left: 1px solid #ccc;
+      border-right: 1px solid #ccc;
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    #resize-handle:hover::after,
+    #resize-handle.dragging::after {
+      opacity: 1;
     }
 
     #elevation-wrap {
@@ -63,7 +94,8 @@
 
     #elevation-wrap h2 { font-size: 13px; color: #888; font-weight: 500; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
 
-    #elevation-chart { height: 140px; }
+    #elevation-chart-wrap { position: relative; height: 140px; }
+    #elevation-chart-wrap canvas { display: block; }
 
     #place-info {
       padding: 16px;
@@ -142,9 +174,10 @@
 <div id="main">
   <div id="map"></div>
   <div id="sidebar">
+    <div id="resize-handle"></div>
     <div id="elevation-wrap">
       <h2>Výškový profil</h2>
-      <canvas id="elevation-chart"></canvas>
+      <div id="elevation-chart-wrap"><canvas id="elevation-chart"></canvas></div>
       <div class="elev-stats" id="elev-stats"></div>
     </div>
     <div id="place-info">
@@ -344,16 +377,10 @@
         elevChart = null;
       }
 
-      // Malé zpoždění, aby se mapa stabilizovala
-      setTimeout(() => {
-        const canvas = document.getElementById('elevation-chart');
-        const ctx = canvas.getContext('2d');
+      const canvas = document.getElementById('elevation-chart');
+      const ctx = canvas.getContext('2d');
 
-        // Zajistíme správnou velikost canvasu
-        canvas.style.width = '100%';
-        canvas.style.height = '140px';
-
-        elevChart = new Chart(ctx, {
+      elevChart = new Chart(ctx, {
           type: 'line',
           data: {
             labels: distances,
@@ -390,8 +417,7 @@
             }
           }
         });
-        console.log("Graf vytvořen s min:", minElev, "max:", maxElev);
-      }, 100);
+      console.log("Graf vytvořen s min:", minElev, "max:", maxElev);
 
     } catch (e) {
       console.error("CHYBA v loadElevation:", e);
@@ -465,6 +491,39 @@
 
     loadRoute('car_fast_traffic');
   });
+
+  // Resize postranního panelu
+  (function () {
+    const sidebar = document.getElementById('sidebar');
+    const handle  = document.getElementById('resize-handle');
+    let dragging = false, startX, startWidth;
+
+    handle.addEventListener('mousedown', e => {
+      dragging   = true;
+      startX     = e.clientX;
+      startWidth = sidebar.offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.cursor     = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const newWidth = Math.min(640, Math.max(200, startWidth + (startX - e.clientX)));
+      sidebar.style.width = newWidth + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.cursor     = '';
+      document.body.style.userSelect = '';
+      map.resize();
+      elevChart?.resize();
+    });
+  })();
 
   // Přepínání typů tras
   document.querySelectorAll('.btn').forEach(btn => {
