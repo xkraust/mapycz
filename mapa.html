@@ -6,6 +6,7 @@
   <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
   <link href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="config.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; }
@@ -188,7 +189,8 @@
 </div>
 
 <script>
-  const API_KEY = 'S3B1rwnPF4X2tFSZu00wtAVCoL00hWfXCEOXdRBCveM';
+  const API_KEY = window.MAPY_API_KEY;
+  if (!API_KEY) console.error('Missing config.js — create it next to mapa.html with:  window.MAPY_API_KEY = "your-mapy.com-key";');
   const PRAHA   = [14.4009399, 50.0711206];
   const BENESOV = [14.6883,    49.7817];
 
