@@ -202,6 +202,7 @@
   };
 
   let elevChart = null;
+  let currentRouteController = null;
 
     const map = new maplibregl.Map({
     container: 'map',
@@ -306,7 +307,7 @@
   }
 
     // === ČISTÁ A ROBUSTNÍ VERZE loadElevation ===
-        async function loadElevation(coords) {
+        async function loadElevation(coords, signal) {
     console.log("loadElevation volána s", coords?.length, "body");
 
     if (!coords || coords.length < 2) {
@@ -326,7 +327,7 @@
         url.searchParams.append('positions', `${lng},${lat}`);
       });
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const json = await response.json();
@@ -420,14 +421,19 @@
       console.log("Graf vytvořen s min:", minElev, "max:", maxElev);
 
     } catch (e) {
+      if (e.name === 'AbortError') return;
       console.error("CHYBA v loadElevation:", e);
-      document.getElementById('elev-stats').innerHTML = 
+      document.getElementById('elev-stats').innerHTML =
         `<div style="color:#e00;font-size:12px">Nelze načíst výškový profil</div>`;
     }
   }
 
   // Načtení trasy
   async function loadRoute(routeType) {
+    if (currentRouteController) currentRouteController.abort();
+    currentRouteController = new AbortController();
+    const signal = currentRouteController.signal;
+
     document.getElementById('info').textContent = 'Načítám trasu…';
 
     try {
@@ -439,7 +445,7 @@
       url.searchParams.set('routeType', routeType);
       url.searchParams.set('avoidToll', 'false');
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const json = await response.json();
@@ -462,9 +468,10 @@
       map.fitBounds(bbox(coords), { padding: 60 });
 
       // Načti výškový profil
-      loadElevation(coords);
+      loadElevation(coords, signal);
 
     } catch (e) {
+      if (e.name === 'AbortError') return;
       console.error(e);
       document.getElementById('info').textContent = 'Chyba při načítání trasy';
     }
