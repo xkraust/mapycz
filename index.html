@@ -140,7 +140,8 @@
 
     .elev-stats {
       display: flex;
-      gap: 12px;
+      flex-direction: column;
+      gap: 8px;
       margin-top: 10px;
     }
 
@@ -150,10 +151,11 @@
       border-radius: 8px;
       padding: 8px 10px;
       font-size: 12px;
-      color: #888;
+      color: #555;
+      line-height: 1.4;
     }
 
-    .elev-stat strong { display: block; font-size: 15px; color: #1a1a2e; font-weight: 600; }
+    .elev-stat strong { font-size: 12px; color: #555; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -161,12 +163,12 @@
 <div id="panel">
   <h1>Praha → Benešov</h1>
   <div class="btn-group">
-    <button class="btn active" data-type="car_fast_traffic">🚗 Auto (provoz)</button>
+    <button class="btn" data-type="car_fast_traffic">🚗 Auto (provoz)</button>
     <button class="btn" data-type="car_fast">🚗 Auto (rychlá)</button>
     <button class="btn" data-type="car_short">🚗 Auto (nejkratší)</button>
     <button class="btn" data-type="foot_fast">🚶 Pěšky</button>
     <button class="btn" data-type="bike_road">🚴 Kolo (silnice)</button>
-    <button class="btn" data-type="bike_mountain">🚵 Kolo (terén)</button>
+    <button class="btn active" data-type="bike_mountain">🚵 Kolo (terén)</button>
   </div>
   <div id="info">Načítám…</div>
 </div>
@@ -353,12 +355,12 @@
       const totalChange = uphill + downhill;
 
       document.getElementById('elev-stats').innerHTML = `
-        <div class="elev-stat"><strong>${minElev} m</strong>minimum</div>
-        <div class="elev-stat"><strong>${maxElev} m</strong>maximum</div>
-        <div class="elev-stat"><strong>+${Math.round(uphill)} m</strong>stoupání</div>
-        <div class="elev-stat"><strong>-${Math.round(downhill)} m</strong>klesání</div>
+        <div class="elev-stat"><strong>Minimum:</strong> ${minElev} m</div>
+        <div class="elev-stat"><strong>Maximum:</strong> ${maxElev} m</div>
+        <div class="elev-stat"><strong>Stoupání:</strong> +${Math.round(uphill)} m</div>
+        <div class="elev-stat"><strong>Klesání:</strong> -${Math.round(downhill)} m</div>
         <div class="elev-stat" style="flex: 1.6; background: #eef3ff; border: 1px solid #c0d0ff;">
-          <strong style="color:#0066ff">${Math.round(totalChange)} m</strong><br>celkové převýšení
+          <strong style="color:#0066ff">Celkové převýšení:</strong> ${Math.round(totalChange)} m
         </div>`;
 
       const distances = [0];
@@ -489,7 +491,7 @@
       }
     });
 
-    loadRoute('car_fast_traffic');
+    loadRoute('bike_mountain');
   });
 
   // Resize postranního panelu
